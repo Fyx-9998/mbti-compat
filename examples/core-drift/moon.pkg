@@ -1,0 +1,10 @@
+// examples/core-drift: M1's first end-to-end demonstration (see the design
+// brief and gate3-decisions-and-plan.md, "M1 implementation plan" step 6) --
+// ahead of `src/report`/`src/cmd` landing (M1 step 7), this package proves
+// `ingest`+`compare` alone already reproduce a real, externally-observed
+// compatibility change, via `core_drift_wbtest.mbt`. See PROVENANCE.md for
+// where the two vendored `.mbti` files in this directory came from.
+import {
+  "mbti-compat/src/ingest",
+  "mbti-compat/src/compare",
+}
