@@ -1,0 +1,4 @@
+// surface: the normalized, comparable model of a MoonBit package's public API.
+// Deliberately dependency-free -- no imports beyond the auto-available prelude
+// (Array, Map, String, etc.) -- so it can be reused by ingest, compare, policy,
+// and report without pulling in moonbitlang/parser transitively.

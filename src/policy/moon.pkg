@@ -1,0 +1,7 @@
+// policy: semver arithmetic, verdicts, and waivers. Pure -- depends on compare
+// (for Delta/Level) but nothing else.
+//
+// TODO (next session):
+//   import {
+//     "mbti-compat/src/compare",
+//   }

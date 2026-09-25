@@ -1,0 +1,7 @@
+// report: text / JSON / Markdown rendering of a Delta. Pure -- depends on
+// compare (for Delta/Change/Level) but nothing else.
+//
+// TODO (next session):
+//   import {
+//     "mbti-compat/src/compare",
+//   }

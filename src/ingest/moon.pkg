@@ -1,0 +1,21 @@
+// ingest: the ONLY package allowed to depend on moonbitlang/parser. Converts
+// its `Mbti` AST into our own `surface.Surface`. Kept as a single, thin
+// boundary so the upstream dependency (self-described as experimental) can be
+// swapped later without touching compare/policy/report/cmd.
+import {
+  "mbti-compat/src/surface",
+  "moonbitlang/parser/mbti_ast",
+  "moonbitlang/parser/mbti_parser",
+  "moonbitlang/parser/syntax",
+  "moonbitlang/lexer/basic",
+  "moonbitlang/core/list",
+}
+
+// `compare` is a test-only dependency: the corpus property tests in
+// `properties_wbtest.mbt` need it to check reflexivity/determinism, but the
+// real `ingest` package (surface -> Mbti conversion only) has no business
+// depending on it, so it's scoped to whitebox tests via `for "wbtest"`
+// rather than added to the main import block above.
+import {
+  "mbti-compat/src/compare",
+} for "wbtest"

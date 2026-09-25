@@ -1,0 +1,5 @@
+// compare: change detection + major/minor/patch classification. Pure and
+// deterministic -- no I/O, no dependency on ingest or moonbitlang/parser.
+import {
+  "mbti-compat/src/surface",
+}

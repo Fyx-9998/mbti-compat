@@ -1,0 +1,5 @@
+pkgtype(kind: "executable")
+supported_targets = "+native+wasm"
+
+// TODO (next session): import ingest, compare, policy, report, surface as the
+// CLI (`check`, `report`, exit codes 0/1/2/3) gets built out.
