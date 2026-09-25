@@ -1,7 +1,21 @@
-// report: text / JSON / Markdown rendering of a Delta. Pure -- depends on
-// compare (for Delta/Change/Level) but nothing else.
+// report: text / JSON rendering of a Delta (Gate 2's design brief). Pure --
+// depends on compare (for Delta/Change/Level) and surface (for Span,
+// referenced by Change's old_span/new_span) but nothing else, same "no I/O"
+// discipline as compare itself.
 //
-// TODO (next session):
-//   import {
-//     "mbti-compat/src/compare",
-//   }
+// `render_markdown` (Gate 2's third renderer, "markdown for PR comments") is
+// explicitly an M2 feature per the roadmap ("M2 version verdict: ...
+// markdown for PR comments") -- deliberately not implemented here.
+import {
+  "mbti-compat/src/compare",
+  "mbti-compat/src/surface",
+}
+
+// `ingest` is a test-only dependency: report_wbtest.mbt needs it to build a
+// real Surface pair to compare and render, but the real `report` package
+// (Delta -> String/Json rendering only) has no business depending on it --
+// same reasoning as src/ingest/moon.pkg's own `for "wbtest"` block for
+// `compare`.
+import {
+  "mbti-compat/src/ingest",
+} for "wbtest"
