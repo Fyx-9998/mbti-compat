@@ -4,7 +4,14 @@
 // `ingest`+`compare` alone already reproduce a real, externally-observed
 // compatibility change, via `core_drift_wbtest.mbt`. See PROVENANCE.md for
 // where the two vendored `.mbti` files in this directory came from.
+//
+// This package has no real (non-test) `.mbt` file of its own yet -- it is
+// the test -- so `ingest`/`compare` are only ever used from
+// `core_drift_wbtest.mbt`. Scoped to `for "wbtest"` (same idiom as
+// `src/ingest/moon.pkg`) rather than the main import block, which otherwise
+// triggers `[0029] unused_package` since nothing in the (nonexistent) real
+// code path uses them.
 import {
   "mbti-compat/src/ingest",
   "mbti-compat/src/compare",
-}
+} for "wbtest"
