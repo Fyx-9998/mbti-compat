@@ -29,7 +29,6 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",
   "moonbitlang/core/env",
-  "moonbitlang/core/json",
 }
 
 supported_targets = "+native+wasm"

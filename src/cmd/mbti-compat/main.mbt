@@ -100,7 +100,7 @@ async fn read_mbti_file(path : String) -> String {
 }
 
 ///| An empty, valid `Surface` -- only ever used as the unreachable-in-
-/// practice fallback value in `parse_surface`'s catch arms (see
+/// practice fallback value in `parse_surface`'s one catch arm (see
 /// `read_mbti_file`'s doc comment above for why a concrete fallback is
 /// supplied at all).
 fn empty_surface() -> @surface.Surface {
@@ -123,16 +123,27 @@ fn empty_surface() -> @surface.Surface {
 /// pattern -- a suberror's variants are reached the same way a package's
 /// other top-level constructors are, not nested under the suberror's own
 /// type name.
+///
+/// This catch has only ONE arm, with no trailing `_ => ...` wildcard: since
+/// `of_mbti_source` raises exactly `IngestError`, and `IngestError` has
+/// exactly one variant (`Parse`), matching that one unguarded constructor is
+/// already exhaustive -- a trailing wildcard here would itself be dead code,
+/// not a safety net. Ground-truthed from `moonbitlang/parser`'s own compiler
+/// test suite (`test/sync_test/__snapshot__/pipeline_test_error_no_payload
+/// .mbt`), which catches a single-variant suberror (`ConstantError`) with a
+/// bare one-arm `catch { ConstantError => ... }` and only adds a `_ =>` arm
+/// once the raise type widens to the general `Error` union. An earlier draft
+/// of this function added a `_ =>` arm "just in case" with a duplicate
+/// `die_ingest(...); empty_surface()` body -- the real `moon check` flagged
+/// that second arm's `empty_surface()` as `[0012] unreachable_code`, which is
+/// this same fact (the wildcard can never be reached) surfacing as a
+/// compiler warning rather than a type error.
 async fn parse_surface(path : String, source : String) -> @surface.Surface {
   try @ingest.of_mbti_source(source, name=path) catch {
     @ingest.Parse(file~, span~, message~) => {
       die_ingest(
         "error: failed to parse \{file} (\{span.start}-\{span.end}): \{message}",
       )
-      empty_surface()
-    }
-    _ => {
-      die_ingest("error: failed to parse \{path}: unrecognized ingest error")
       empty_surface()
     }
   } noraise {
