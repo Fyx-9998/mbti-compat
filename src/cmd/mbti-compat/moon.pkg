@@ -1,5 +1,37 @@
-pkgtype(kind: "executable")
+// Thin CLI: parses two .mbti file paths from argv (`cli.mbt`, pure, covered
+// by `cli_wbtest.mbt`'s plain synchronous tests), then pipes them through
+// ingest -> compare -> report and prints the result (`main.mbt`, the only
+// file in this package that touches argv, the filesystem, or process exit
+// codes). The async CLI pattern itself -- `async fn main`, `@env.args()`,
+// `@fs.read_file(path).text()`, `@stdio.stdout`/`@stdio.stderr`, the
+// `try/catch/noraise` construct, and the native-extern/wasm-FFI `exit()`
+// pair -- is ground-truthed verbatim from `moonbitlang/parser/cmd/mq` (and
+// cross-checked against `cmd/moonfmt`), cloned directly from GitHub for this
+// purpose; see gate3-decisions-and-plan.md's "Real syntax/API corrections"
+// section for the full trail.
+//
+// NOTE (owner action needed before `moon check`/`moon test`): this package
+// needs `moonbitlang/async` as a new direct dependency of the whole project,
+// exactly the way `moonbitlang/parser`/`moonbitlang/lexer` were added
+// earlier -- run this once, from the real toolchain, before checking out
+// this change:
+//   moon add moonbitlang/async
+// Its `fs`/`stdio` subpackages, imported below, come along with that one
+// `moon add` -- no separate add needed for them, same as
+// `moonbitlang/lexer/basic` needed no extra add beyond `moon add
+// moonbitlang/lexer` itself (see moon.mod's own comment on that).
+import {
+  "mbti-compat/src/ingest",
+  "mbti-compat/src/compare",
+  "mbti-compat/src/report",
+  "mbti-compat/src/surface",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
 supported_targets = "+native+wasm"
 
-// TODO (next session): import ingest, compare, policy, report, surface as the
-// CLI (`check`, `report`, exit codes 0/1/2/3) gets built out.
+pkgtype(kind: "executable")
