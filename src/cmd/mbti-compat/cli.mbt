@@ -8,6 +8,7 @@
 /// `gate3-decisions-and-plan.md`'s "Real syntax/API corrections" section).
 enum CliAction {
   RunCheck(CheckOptions)
+  Explain(String)
   Help(String)
   Error(String)
 }
@@ -20,33 +21,46 @@ struct CheckOptions {
   color : Bool
 }
 
-///| `mbti-compat`'s only real command today (M1). Gate 2's roadmap sketched
-/// `report` alongside `check`, but `render_text`/`render_json` (`src/report`)
-/// are exactly what `check`'s own `--json` flag already exposes -- a
-/// separate subcommand would not have added anything a flag doesn't already
-/// cover, so only `check` is implemented.
+///| `mbti-compat`'s real commands today (M1's `check`, plus M2's first CLI-
+/// wired addition, `--explain <rule-id>`). Gate 2's roadmap sketched `report`
+/// alongside `check`, but `render_text`/`render_json` (`src/report`) are
+/// exactly what `check`'s own `--json` flag already exposes -- a separate
+/// subcommand would not have added anything a flag doesn't already cover, so
+/// only `check` is implemented as a subcommand. `--explain` is a top-level
+/// flag rather than a subcommand of its own: Gate 2's design brief names it
+/// as exactly that (`--explain <rule>`), and `src/compare/explain.mbt`'s own
+/// doc comment says the same ("for `--explain <rule>`").
 fn usage() -> String {
   (
     #|Usage: mbti-compat check [options] <old.mbti> <new.mbti>
+    #|       mbti-compat --explain <rule-id>
     #|
-    #|Compare two .mbti files and report the classified differences.
+    #|Compare two .mbti files and report the classified differences, or look
+    #|up a short explanation for one classification rule id (the id printed
+    #|alongside each change in check's own output).
     #|
     #|Arguments:
     #|  <old.mbti>  Path to the old (baseline) .mbti file
     #|  <new.mbti>  Path to the new .mbti file
+    #|  <rule-id>   A rule id such as "sym-removed" (see check's output for
+    #|              the id attached to each reported change)
     #|
     #|Options:
-    #|  -h, --help  Show help information.
-    #|  --json      Print the delta as JSON instead of text.
-    #|  --color     Colorize text output with ANSI escape codes (off by
-    #|              default -- this build has no proven way to detect
-    #|              whether stdout is a terminal, so it never guesses).
+    #|  -h, --help        Show help information.
+    #|  --json            Print the delta as JSON instead of text.
+    #|  --color           Colorize text output with ANSI escape codes (off by
+    #|                    default -- this build has no proven way to detect
+    #|                    whether stdout is a terminal, so it never guesses).
+    #|  --explain <rule-id>
+    #|                    Print a short explanation of one rule id and exit,
+    #|                    instead of comparing any files.
     #|
     #|Exit codes:
-    #|  0  no version bump required
+    #|  0  no version bump required, or --explain recognized the rule id
     #|  1  a version bump is required
     #|  2  one of the input files could not be read or parsed as .mbti
-    #|  3  usage error (bad arguments)
+    #|  3  usage error (bad arguments), or --explain was given an id this
+    #|     build doesn't recognize
   )
 }
 
@@ -59,6 +73,9 @@ fn cli_error(message : String) -> CliAction {
 }
 
 ///| Entry point for the whole command line (everything after argv[0]).
+/// `--explain` is checked before the `check`-subcommand check below: it's a
+/// top-level flag, not a subcommand, so it must not fall through to "unknown
+/// subcommand: --explain".
 fn parse_cli(args : ArrayView[String]) -> CliAction {
   if args.length() == 0 {
     return cli_error("expected subcommand: check")
@@ -67,10 +84,31 @@ fn parse_cli(args : ArrayView[String]) -> CliAction {
   if is_help_arg(first) {
     return Help(usage())
   }
+  if first == "--explain" {
+    return parse_explain(args[1:])
+  }
   if first != "check" {
     return cli_error("unknown subcommand: \{first}")
   }
   parse_check(args[1:])
+}
+
+///| Parse `--explain`'s own argument: exactly one rule id, no options of its
+/// own. `-h`/`--help` in that one slot still shows help (consistent with
+/// `parse_check`'s own `-h` handling), rather than being treated as a
+/// (nonsensical) literal rule id to look up.
+fn parse_explain(args : ArrayView[String]) -> CliAction {
+  if args.length() == 0 {
+    return cli_error("--explain requires a <rule-id> argument")
+  }
+  let first = args[0]
+  if is_help_arg(first) {
+    return Help(usage())
+  }
+  if args.length() > 1 {
+    return cli_error("unexpected argument: \{args[1]}")
+  }
+  Explain(first)
 }
 
 fn parse_check(args : ArrayView[String]) -> CliAction {

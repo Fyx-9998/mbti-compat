@@ -179,11 +179,34 @@ async fn run_check(options : CheckOptions) -> Unit {
   }
 }
 
+///| `--explain <rule-id>`: print a short explanation of one classification
+/// rule id and exit 0, or exit 3 -- reusing the usage-error code, since
+/// Gate 2's four-code scheme has no dedicated case for "unrecognized rule
+/// id" and an unrecognized id is, at bottom, a bad argument -- if
+/// `@compare.explain` doesn't recognize it.
+///
+/// `@compare.RuleId(rule_id)`, a plain tuple-struct constructor call across
+/// the package boundary, is ground-truthed verbatim from
+/// `src/ingest/ingest.mbt`'s own real, already-compiling
+/// `@surface.SymbolId(f.name.name)` -- `SymbolId` and `RuleId` are both
+/// `pub(all) struct Name(String)` tuple-struct newtypes, so the same
+/// cross-package call syntax applies to both.
+async fn run_explain(rule_id : String) -> Unit {
+  match @compare.explain(@compare.RuleId(rule_id)) {
+    Some(text) => {
+      write_stdout("\{text}\n")
+      halt_ok()
+    }
+    None => die_usage("error: unknown rule id: \{rule_id}")
+  }
+}
+
 ///|
 async fn main {
   match parse_cli(program_args()) {
     Help(text) => write_stdout("\{text}\n")
     Error(message) => die_usage(message)
     RunCheck(options) => run_check(options)
+    Explain(rule_id) => run_explain(rule_id)
   }
 }

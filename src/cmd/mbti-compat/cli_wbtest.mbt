@@ -116,3 +116,42 @@ test "parse_cli treats -h inside check's arguments as help too" {
     _ => fail("expected Help for -h appearing after check's subcommand")
   }
 }
+
+///|
+test "parse_cli parses --explain with a rule id" {
+  let args : Array[String] = ["--explain", "sym-removed"]
+  match parse_cli(args[0:]) {
+    Explain(rule_id) =>
+      if rule_id != "sym-removed" {
+        fail("expected rule_id to be \"sym-removed\", got \{rule_id}")
+      }
+    _ => fail("expected Explain")
+  }
+}
+
+///|
+test "parse_cli treats --explain -h as a request for help text" {
+  let args : Array[String] = ["--explain", "-h"]
+  match parse_cli(args[0:]) {
+    Help(_) => ()
+    _ => fail("expected Help for --explain -h")
+  }
+}
+
+///|
+test "parse_cli rejects --explain with no rule id" {
+  let args : Array[String] = ["--explain"]
+  match parse_cli(args[0:]) {
+    Error(_) => ()
+    _ => fail("expected an Error for --explain with no rule id")
+  }
+}
+
+///|
+test "parse_cli rejects --explain with more than one argument" {
+  let args : Array[String] = ["--explain", "sym-removed", "extra"]
+  match parse_cli(args[0:]) {
+    Error(_) => ()
+    _ => fail("expected an Error for --explain with an extra argument")
+  }
+}
