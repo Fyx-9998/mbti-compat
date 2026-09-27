@@ -1,7 +1,38 @@
-// policy: semver arithmetic, verdicts, and waivers. Pure -- depends on compare
-// (for Delta/Level) but nothing else.
+// policy: semver arithmetic for M2's "version verdict" (Gate 2's roadmap:
+// "M2 version verdict: policy incl. 0.x, --declared, --baseline <dir>,
+// waivers, --explain, markdown for PR comments"). This round implements only
+// the piece the owner chose to build first: `Version`, `required_version`
+// (0.x-aware), `Verdict`, `verdict`. Pure -- depends on `compare` (for
+// `Delta`/`Level`) and `moonbitlang/core/string` (for `parse_int`, used to
+// parse a `Version` out of a plain "MAJOR.MINOR.PATCH" string) but nothing
+// else, same "no I/O" discipline `compare`/`report` already follow.
 //
-// TODO (next session):
-//   import {
-//     "mbti-compat/src/compare",
-//   }
+// Deliberately NOT implemented here (each is its own design pass, not
+// guessed at under time pressure): `Waivers`/`Waivers::parse`/`Delta::apply`
+// (no waiver file format is specified anywhere in Gate 1/2/3 -- inventing
+// one needs its own decision, not a side effect of this step); `--baseline
+// <dir>` whole-module comparison; `--explain`; `render_markdown`. See
+// gate3-decisions-and-plan.md's M2 section.
+//
+// Also NOT yet wired into `src/cmd/mbti-compat`'s CLI: doing that needs a
+// specific flag design first -- Gate 2 names a `--declared <version>` flag
+// but the *baseline* (currently-published) version that `required_version`/
+// `verdict` also need as an input has no named flag anywhere in Gate 1/2/3
+// (`--baseline <dir>` is a directory of `.mbti` files for the old side of a
+// whole-module comparison, not a version number) -- deferred to a follow-up
+// step rather than inventing a flag name here. See gate3-decisions-and-plan.md.
+import {
+  "mbti-compat/src/compare",
+  "moonbitlang/core/string",
+}
+
+// `ingest` is a test-only dependency: policy_wbtest.mbt's `patch_delta`/
+// `minor_delta`/`major_delta` helpers need it to build a real `Delta` by
+// running tiny `.mbti` source snippets through `@ingest.of_mbti_source(...)`
+// + `@compare.compare(...)`, rather than hand-constructing `Delta`/`Change`
+// struct literals directly (no precedent anywhere in this project does
+// that -- see report_wbtest.mbt's own identical convention). The real
+// `policy` package has no business depending on `ingest` itself.
+import {
+  "mbti-compat/src/ingest",
+} for "wbtest"
