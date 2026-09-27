@@ -38,7 +38,7 @@ test "parse_cli rejects an unknown subcommand" {
 }
 
 ///|
-test "parse_cli parses check with two paths and json/markdown/color all off by default" {
+test "parse_cli parses check with two paths and json/markdown/color/declared/baseline_version all off by default" {
   let args : Array[String] = ["check", "old.mbti", "new.mbti"]
   match parse_cli(args[0:]) {
     RunCheck(opts) => {
@@ -56,6 +56,12 @@ test "parse_cli parses check with two paths and json/markdown/color all off by d
       }
       if opts.color {
         fail("expected color to default to false")
+      }
+      if opts.declared is Some(_) {
+        fail("expected declared to default to None")
+      }
+      if opts.baseline_version is Some(_) {
+        fail("expected baseline_version to default to None")
       }
     }
     _ => fail("expected RunCheck")
@@ -81,6 +87,76 @@ test "parse_cli parses --markdown in any position relative to the paths" {
       }
     }
     _ => fail("expected RunCheck")
+  }
+}
+
+///|
+test "parse_cli parses --declared and --baseline-version together, in any position" {
+  let args : Array[String] = [
+    "check", "--declared", "1.3.0", "old.mbti", "--baseline-version", "1.2.0", "new.mbti",
+  ]
+  match parse_cli(args[0:]) {
+    RunCheck(opts) => {
+      match opts.declared {
+        Some(v) =>
+          if v != "1.3.0" {
+            fail("expected declared to be \"1.3.0\", got \{v}")
+          }
+        None => fail("expected declared to be Some")
+      }
+      match opts.baseline_version {
+        Some(v) =>
+          if v != "1.2.0" {
+            fail("expected baseline_version to be \"1.2.0\", got \{v}")
+          }
+        None => fail("expected baseline_version to be Some")
+      }
+      if opts.old_path != "old.mbti" {
+        fail("expected old_path to be \"old.mbti\", got \{opts.old_path}")
+      }
+      if opts.new_path != "new.mbti" {
+        fail("expected new_path to be \"new.mbti\", got \{opts.new_path}")
+      }
+    }
+    _ => fail("expected RunCheck")
+  }
+}
+
+///|
+test "parse_cli rejects --declared without --baseline-version" {
+  let args : Array[String] = ["check", "--declared", "1.3.0", "old.mbti", "new.mbti"]
+  match parse_cli(args[0:]) {
+    Error(_) => ()
+    _ => fail("expected an Error when --declared is given without --baseline-version")
+  }
+}
+
+///|
+test "parse_cli rejects --baseline-version without --declared" {
+  let args : Array[String] = [
+    "check", "--baseline-version", "1.2.0", "old.mbti", "new.mbti",
+  ]
+  match parse_cli(args[0:]) {
+    Error(_) => ()
+    _ => fail("expected an Error when --baseline-version is given without --declared")
+  }
+}
+
+///|
+test "parse_cli rejects --declared with no value" {
+  let args : Array[String] = ["check", "old.mbti", "new.mbti", "--declared"]
+  match parse_cli(args[0:]) {
+    Error(_) => ()
+    _ => fail("expected an Error for --declared with no following value")
+  }
+}
+
+///|
+test "parse_cli rejects --baseline-version with no value" {
+  let args : Array[String] = ["check", "old.mbti", "new.mbti", "--baseline-version"]
+  match parse_cli(args[0:]) {
+    Error(_) => ()
+    _ => fail("expected an Error for --baseline-version with no following value")
   }
 }
 

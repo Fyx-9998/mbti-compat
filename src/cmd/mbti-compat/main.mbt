@@ -24,11 +24,15 @@ fn[T] halt_ok() -> T {
   panic()
 }
 
-///| Exit 1 -- "1 insufficient bump". M1 has no `--declared`/`src/policy` yet
-/// (both are M2), so there is no declared bump to compare against -- this
-/// build uses exit 1 for the honestly-scoped subset it *can* compute today:
-/// "the delta requires a version bump of some size", full declared-vs-
-/// required comparison deferred to M2 without renumbering the exit codes.
+///| Exit 1 -- "1 insufficient bump". `run_check`'s `_` branch (no
+/// `--declared`/`--baseline-version` given) still uses this for the
+/// honestly-scoped M1 subset it can compute without a declared version to
+/// compare against: "the delta requires a version bump of some size", not a
+/// real sufficiency check. `run_verdict` (M2, see its own doc comment) also
+/// calls this, but only after a real `@policy.verdict` computation found the
+/// declared version genuinely insufficient -- the exit code means the same
+/// thing (a bump is needed), just backed by a real comparison instead of an
+/// approximation once `--declared`/`--baseline-version` are both given.
 fn[T] halt_bump_required() -> T {
   exit(1)
   panic()
@@ -152,9 +156,13 @@ async fn parse_surface(path : String, source : String) -> @surface.Surface {
 }
 
 ///| The whole `check` pipeline: read both files, parse both, compare, render,
-/// print, exit 0 or 1 depending on whether the resulting `Delta` needs a
-/// version bump at all (see `halt_bump_required`'s doc comment for the exact,
-/// M1-scoped meaning of exit 1 today).
+/// print, then either the M1-era exit-code approximation (0/1 depending on
+/// whether the resulting `Delta` needs a version bump at all -- see
+/// `halt_bump_required`'s doc comment) or, when both `options.declared` and
+/// `options.baseline_version` were given, Gate 2's real sufficient/
+/// insufficient verdict (see `run_verdict`'s own doc comment) -- the follow-
+/// up step `src/policy`'s own section named as still needing a baseline-
+/// version flag design before it could be wired in.
 async fn run_check(options : CheckOptions) -> Unit {
   let old_source = read_mbti_file(options.old_path)
   let new_source = read_mbti_file(options.new_path)
@@ -174,15 +182,134 @@ async fn run_check(options : CheckOptions) -> Unit {
     @report.render_text(delta, color=options.color)
   }
   write_stdout("\{output}\n")
-  // Fully-qualified `@compare.Level::Patch`, not a bare `Patch` -- this file
-  // has no `using @compare { type Level }` block, and one `==` check is a
-  // one-off not worth adding one for (same reasoning `inverse_and_noise_
-  // wbtest.mbt` and `core_drift_wbtest.mbt` already used for constructor
-  // access elsewhere in this project).
-  if delta.level() == @compare.Level::Patch {
-    halt_ok()
-  } else {
-    halt_bump_required()
+  match (options.declared, options.baseline_version) {
+    (Some(declared_raw), Some(baseline_raw)) =>
+      run_verdict(
+        declared_raw,
+        baseline_raw,
+        delta,
+        json=options.json,
+        markdown=options.markdown,
+      )
+    _ =>
+      // Fully-qualified `@compare.Level::Patch`, not a bare `Patch` -- this
+      // file has no `using @compare { type Level }` block, and one `==`
+      // check is a one-off not worth adding one for (same reasoning
+      // `inverse_and_noise_wbtest.mbt` and `core_drift_wbtest.mbt` already
+      // used for constructor access elsewhere in this project).
+      if delta.level() == @compare.Level::Patch {
+        halt_ok()
+      } else {
+        halt_bump_required()
+      }
+  }
+}
+
+///| Parse one `--declared`/`--baseline-version` argument into a
+/// `@policy.Version`, exiting 3 via `die_usage` on a malformed one.
+/// Deliberately supplies an explicit fallback value in the one catch arm
+/// (`@policy.Version::{ major: 0, minor: 0, patch: 0 }`, the same
+/// `@pkg.Type::{ field: value, ... }` struct-literal shape `main.mbt`'s own
+/// `empty_surface` already uses to build a `@surface.Surface` from outside
+/// its defining package) rather than relying on `die_usage`'s generic return
+/// type unifying directly with `@policy.Version` in tail position -- the
+/// same caution `read_mbti_file`'s own doc comment already explains for a
+/// non-`Unit` return type, reused here for a second, unrelated non-`Unit`
+/// return type.
+async fn parse_version_arg(raw : String, flag_name : String) -> @policy.Version {
+  try @policy.Version::parse(raw) catch {
+    @policy.InvalidFormat(raw=bad) => {
+      die_usage(
+        "error: invalid version for \{flag_name}: \"\{bad}\" (expected MAJOR.MINOR.PATCH)",
+      )
+      @policy.Version::{ major: 0, minor: 0, patch: 0 }
+    }
+  } noraise {
+    version => version
+  }
+}
+
+///| Gate 2's real "is the declared version bump sufficient?" verdict --
+/// replaces the M1-era exit-code approximation (`halt_ok`/
+/// `halt_bump_required` in `run_check`'s own `_` branch) for the specific
+/// case where the caller supplied both `--declared` and `--baseline-version`
+/// (`parse_check` rejects supplying only one of the two -- see `cli.mbt`).
+/// Parses both raw strings (`parse_version_arg`, exit 3 on a malformed one),
+/// computes `@policy.verdict`, prints one line/object reporting the result,
+/// and exits 0 for `Sufficient` or 1 for `Insufficient`, matching Gate 2's
+/// design brief's actual "0 sufficient, 1 insufficient bump" semantics for
+/// the first time in this project (everywhere else, exit 0/1 has only ever
+/// meant the honestly-scoped M1 approximation "no bump needed"/"some bump
+/// needed", documented as such in `halt_bump_required`'s own doc comment).
+///
+/// **Deliberately prints a second, separate line/JSON object after the
+/// delta's own `--json`/`--markdown`/text rendering, rather than folding the
+/// verdict into `render_json`/`render_markdown`/`render_text` themselves.**
+/// Those three renderers are Gate 2's own named signatures, operating on
+/// `Delta` alone (`report`'s own package has no dependency on `policy` and
+/// this project isn't adding one for a CLI-only concern); a verdict only
+/// exists when `--declared`/`--baseline-version` were both given, so it's
+/// necessarily optional in a way none of `Delta`'s own fields are. In
+/// `--json` mode this makes stdout two newline-delimited JSON objects (the
+/// delta, then the verdict) rather than one combined document -- a
+/// deliberate, documented choice (see `usage()`'s own text) rather than an
+/// oversight, and still trivially machine-parseable line by line (the same
+/// "JSON Lines" shape many real CLI tools already use for this kind of
+/// "here's the main report, plus one more small fact" output).
+async fn run_verdict(
+  declared_raw : String,
+  baseline_raw : String,
+  delta : @compare.Delta,
+  json~ : Bool,
+  markdown~ : Bool,
+) -> Unit {
+  let declared = parse_version_arg(declared_raw, "--declared")
+  let baseline = parse_version_arg(baseline_raw, "--baseline-version")
+  match @policy.verdict(baseline~, declared~, delta~) {
+    @policy.Verdict::Sufficient(_) => {
+      // The `Json::object({...})` value is built into a `let` first, then
+      // interpolated on a single line (`"\{verdict_json.stringify()}\n"`) --
+      // the same single-line-interpolation shape `run_check`'s own `output`
+      // binding already uses, rather than nesting the multi-line map literal
+      // directly inside a `\{...}` interpolation (this project has no proof
+      // a string interpolation block itself can safely span multiple
+      // physical lines, so this sidesteps the question entirely).
+      if json {
+        let verdict_json = Json::object({
+          "verdict": Json::string("sufficient"),
+          "declared": Json::string(declared.to_string()),
+        })
+        write_stdout("\{verdict_json.stringify()}\n")
+      } else if markdown {
+        write_stdout(
+          "\n**Verdict:** sufficient -- declared `\{declared.to_string()}` covers this change.\n",
+        )
+      } else {
+        write_stdout(
+          "Verdict: sufficient -- declared \{declared.to_string()} covers this change.\n",
+        )
+      }
+      halt_ok()
+    }
+    @policy.Verdict::Insufficient(required~, declared~) => {
+      if json {
+        let verdict_json = Json::object({
+          "verdict": Json::string("insufficient"),
+          "declared": Json::string(declared.to_string()),
+          "required": Json::string(required.to_string()),
+        })
+        write_stdout("\{verdict_json.stringify()}\n")
+      } else if markdown {
+        write_stdout(
+          "\n**Verdict:** insufficient -- declared `\{declared.to_string()}`, at least `\{required.to_string()}` is required.\n",
+        )
+      } else {
+        write_stdout(
+          "Verdict: insufficient -- declared \{declared.to_string()}, at least \{required.to_string()} is required.\n",
+        )
+      }
+      halt_bump_required()
+    }
   }
 }
 

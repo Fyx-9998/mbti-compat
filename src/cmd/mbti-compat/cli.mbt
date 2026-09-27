@@ -21,12 +21,29 @@ enum CliAction {
 /// treating the combination as a usage error -- the same "don't validate a
 /// combination nothing asked for" precedent `color` already set by being
 /// silently ignored whenever `json` is also set.
+///
+/// `declared`/`baseline_version` are the raw, unparsed strings from
+/// `--declared <version>`/`--baseline-version <version>` (both `None` unless
+/// given) -- deliberately not parsed into `@policy.Version` here. `cli.mbt`
+/// stays pure (no `raise`, no I/O) throughout this whole file, and
+/// `Version::parse` raises; `main.mbt`'s `run_verdict` is where the real
+/// parsing (and its exit-3-on-malformed-input handling) happens, matching
+/// the same cli.mbt-parses-shape/main.mbt-parses-semantics split
+/// `read_mbti_file`/`parse_surface` already established for file paths. When
+/// both are given, `main.mbt`'s `run_check` computes Gate 2's real
+/// sufficient/insufficient verdict instead of the M1-era exit-code
+/// approximation -- see `run_verdict`'s own doc comment. `parse_check`
+/// itself still enforces that the two are given together, not separately
+/// (see its own doc comment) -- that's a pure shape constraint on the
+/// argument list, not semantic version validation, so it belongs here.
 struct CheckOptions {
   old_path : String
   new_path : String
   json : Bool
   markdown : Bool
   color : Bool
+  declared : String?
+  baseline_version : String?
 }
 
 ///| `mbti-compat`'s real commands today (M1's `check`, plus M2's first CLI-
@@ -63,16 +80,30 @@ fn usage() -> String {
     #|                    default -- this build has no proven way to detect
     #|                    whether stdout is a terminal, so it never guesses).
     #|                    Has no effect on --json or --markdown output.
+    #|  --declared <version>
+    #|                    The version you intend to publish, e.g. 1.3.0. Must
+    #|                    be given together with --baseline-version (each
+    #|                    requires the other). When both are given, check
+    #|                    reports whether --declared is a sufficient bump
+    #|                    over --baseline-version for this change, instead of
+    #|                    just whether some bump is required.
+    #|  --baseline-version <version>
+    #|                    The currently-published version, e.g. 1.2.0. See
+    #|                    --declared above.
     #|  --explain <rule-id>
     #|                    Print a short explanation of one rule id and exit,
     #|                    instead of comparing any files.
     #|
     #|Exit codes:
-    #|  0  no version bump required, or --explain recognized the rule id
-    #|  1  a version bump is required
+    #|  0  no version bump required; or, with --declared/--baseline-version,
+    #|     --declared is a sufficient bump; or --explain recognized the rule
+    #|     id
+    #|  1  a version bump is required; or, with --declared/--baseline-version,
+    #|     --declared is not a sufficient bump
     #|  2  one of the input files could not be read or parsed as .mbti
-    #|  3  usage error (bad arguments), or --explain was given an id this
-    #|     build doesn't recognize
+    #|  3  usage error (bad arguments); --declared or --baseline-version was
+    #|     given without the other, or with a malformed version string; or
+    #|     --explain was given an id this build doesn't recognize
   )
 }
 
@@ -123,12 +154,25 @@ fn parse_explain(args : ArrayView[String]) -> CliAction {
   Explain(first)
 }
 
+///| `--declared <version>` and `--baseline-version <version>` are the first
+/// two-token (`--flag value`) options this CLI has needed -- every prior
+/// option (`--json`, `--markdown`, `--color`) was a bare boolean switch. The
+/// `if i + 1 >= args.length() { return cli_error(...) }; ...; i = i + 2;
+/// continue` shape for each is ground-truthed verbatim from
+/// `moonbitlang/parser/cmd/mq/cli.mbt`'s real `parse_legacy` (its
+/// `--file-type`/`-c`/`--output` handling) -- the same file this project's
+/// `while`-loop/`ArrayView` slicing pattern was already ground-truthed from,
+/// just the `continue` branch that pattern predicted `mbti-compat` would
+/// eventually need once it grew a non-boolean flag (see this project's own
+/// "Real syntax/API corrections" notes on `while` loops).
 fn parse_check(args : ArrayView[String]) -> CliAction {
   let mut old_path : String? = None
   let mut new_path : String? = None
   let mut json = false
   let mut markdown = false
   let mut color = false
+  let mut declared : String? = None
+  let mut baseline_version : String? = None
   let mut i = 0
   while i < args.length() {
     let arg = args[i]
@@ -143,6 +187,20 @@ fn parse_check(args : ArrayView[String]) -> CliAction {
     } else if arg == "--color" {
       color = true
       i = i + 1
+    } else if arg == "--declared" {
+      if i + 1 >= args.length() {
+        return cli_error("missing value for --declared")
+      }
+      declared = Some(args[i + 1])
+      i = i + 2
+      continue
+    } else if arg == "--baseline-version" {
+      if i + 1 >= args.length() {
+        return cli_error("missing value for --baseline-version")
+      }
+      baseline_version = Some(args[i + 1])
+      i = i + 2
+      continue
     } else if arg.has_prefix("-") && arg != "-" {
       return cli_error("unknown option: \{arg}")
     } else if old_path is None {
@@ -155,12 +213,36 @@ fn parse_check(args : ArrayView[String]) -> CliAction {
       return cli_error("unexpected argument: \{arg}")
     }
   }
+  // `--declared`/`--baseline-version` are only meaningful together (see
+  // `CheckOptions`'s own doc comment) -- rejected here, as a pure shape
+  // constraint on the argument list. Plain `is Some(_)`/`is None` boolean
+  // checks read more directly than a `match (declared, baseline_version) {
+  // ... }` tuple match would for a two-armed "exactly one is missing" check
+  // like this (`src/compare/compare.mbt`'s own `diff_symbol` already proves
+  // the tuple-match form real and compiling for its four-armed
+  // `(Option, Option)` case, reused directly in `main.mbt`'s `run_check`
+  // for its simpler two-armed "both given or neither" dispatch).
+  if declared is Some(_) && baseline_version is None {
+    return cli_error("--declared requires --baseline-version to also be given")
+  }
+  if baseline_version is Some(_) && declared is None {
+    return cli_error("--baseline-version requires --declared to also be given")
+  }
   match old_path {
     None => cli_error("missing <old.mbti> and <new.mbti>")
     Some(old) =>
       match new_path {
         None => cli_error("missing <new.mbti>")
-        Some(new) => RunCheck({ old_path: old, new_path: new, json, markdown, color })
+        Some(new) =>
+          RunCheck({
+            old_path: old,
+            new_path: new,
+            json,
+            markdown,
+            color,
+            declared,
+            baseline_version,
+          })
       }
   }
 }

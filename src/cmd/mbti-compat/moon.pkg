@@ -2,7 +2,13 @@
 // by `cli_wbtest.mbt`'s plain synchronous tests), then pipes them through
 // ingest -> compare -> report and prints the result (`main.mbt`, the only
 // file in this package that touches argv, the filesystem, or process exit
-// codes). The async CLI pattern itself -- `async fn main`, `@env.args()`,
+// codes). Also depends on `mbti-compat/src/policy` (added for
+// `--declared`/`--baseline-version` -- see `main.mbt`'s `run_verdict`): this
+// is the first *real* (non-test-only) dependency `policy` has gained, since
+// wiring Gate 2's actual sufficient/insufficient verdict into the CLI is
+// exactly the piece `src/policy`'s own module comment named as deliberately
+// deferred follow-up work when `policy` itself was first written. The async
+// CLI pattern itself -- `async fn main`, `@env.args()`,
 // `@fs.read_file(path).text()`, `@stdio.stdout`/`@stdio.stderr`, the
 // `try/catch/noraise` construct, and the native-extern/wasm-FFI `exit()`
 // pair -- is ground-truthed verbatim from `moonbitlang/parser/cmd/mq` (and
@@ -25,6 +31,7 @@ import {
   "mbti-compat/src/compare",
   "mbti-compat/src/report",
   "mbti-compat/src/surface",
+  "mbti-compat/src/policy",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/stdio",

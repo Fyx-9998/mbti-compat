@@ -14,13 +14,14 @@
 // <dir>` whole-module comparison; `--explain`; `render_markdown`. See
 // gate3-decisions-and-plan.md's M2 section.
 //
-// Also NOT yet wired into `src/cmd/mbti-compat`'s CLI: doing that needs a
-// specific flag design first -- Gate 2 names a `--declared <version>` flag
-// but the *baseline* (currently-published) version that `required_version`/
-// `verdict` also need as an input has no named flag anywhere in Gate 1/2/3
-// (`--baseline <dir>` is a directory of `.mbti` files for the old side of a
-// whole-module comparison, not a version number) -- deferred to a follow-up
-// step rather than inventing a flag name here. See gate3-decisions-and-plan.md.
+// Wired into `src/cmd/mbti-compat`'s CLI as of the `--declared`/
+// `--baseline-version` round: `--baseline <dir>` was already reserved (Gate
+// 2 names it as a directory of `.mbti` files for a whole-module comparison,
+// not a version number), so the invented flag for the *baseline*
+// (currently-published) version `required_version`/`verdict` also need as
+// an input is named `--baseline-version` instead, avoiding any collision
+// with that still-unimplemented flag. See `src/cmd/mbti-compat/main.mbt`'s
+// `run_verdict` and gate3-decisions-and-plan.md's dedicated section on this.
 import {
   "mbti-compat/src/compare",
   "moonbitlang/core/string",
