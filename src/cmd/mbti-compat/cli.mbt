@@ -14,10 +14,18 @@ enum CliAction {
 }
 
 ///| Parsed, validated arguments for `mbti-compat check <old.mbti> <new.mbti>`.
+/// `json` and `markdown` are independent flags, not a single output-format
+/// enum -- matching how `json`/`color` were already independent booleans
+/// before this round. If both `json` and `markdown` are given, `main.mbt`'s
+/// `run_check` picks JSON first (documented there, not here) rather than
+/// treating the combination as a usage error -- the same "don't validate a
+/// combination nothing asked for" precedent `color` already set by being
+/// silently ignored whenever `json` is also set.
 struct CheckOptions {
   old_path : String
   new_path : String
   json : Bool
+  markdown : Bool
   color : Bool
 }
 
@@ -48,9 +56,13 @@ fn usage() -> String {
     #|Options:
     #|  -h, --help        Show help information.
     #|  --json            Print the delta as JSON instead of text.
+    #|  --markdown        Print the delta as Markdown (for a PR comment)
+    #|                    instead of text. If both --json and --markdown are
+    #|                    given, --json wins.
     #|  --color           Colorize text output with ANSI escape codes (off by
     #|                    default -- this build has no proven way to detect
     #|                    whether stdout is a terminal, so it never guesses).
+    #|                    Has no effect on --json or --markdown output.
     #|  --explain <rule-id>
     #|                    Print a short explanation of one rule id and exit,
     #|                    instead of comparing any files.
@@ -115,6 +127,7 @@ fn parse_check(args : ArrayView[String]) -> CliAction {
   let mut old_path : String? = None
   let mut new_path : String? = None
   let mut json = false
+  let mut markdown = false
   let mut color = false
   let mut i = 0
   while i < args.length() {
@@ -123,6 +136,9 @@ fn parse_check(args : ArrayView[String]) -> CliAction {
       return Help(usage())
     } else if arg == "--json" {
       json = true
+      i = i + 1
+    } else if arg == "--markdown" {
+      markdown = true
       i = i + 1
     } else if arg == "--color" {
       color = true
@@ -144,7 +160,7 @@ fn parse_check(args : ArrayView[String]) -> CliAction {
     Some(old) =>
       match new_path {
         None => cli_error("missing <new.mbti>")
-        Some(new) => RunCheck({ old_path: old, new_path: new, json, color })
+        Some(new) => RunCheck({ old_path: old, new_path: new, json, markdown, color })
       }
   }
 }

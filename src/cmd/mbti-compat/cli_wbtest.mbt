@@ -38,7 +38,7 @@ test "parse_cli rejects an unknown subcommand" {
 }
 
 ///|
-test "parse_cli parses check with two paths and json/color both off by default" {
+test "parse_cli parses check with two paths and json/markdown/color all off by default" {
   let args : Array[String] = ["check", "old.mbti", "new.mbti"]
   match parse_cli(args[0:]) {
     RunCheck(opts) => {
@@ -51,8 +51,33 @@ test "parse_cli parses check with two paths and json/color both off by default" 
       if opts.json {
         fail("expected json to default to false")
       }
+      if opts.markdown {
+        fail("expected markdown to default to false")
+      }
       if opts.color {
         fail("expected color to default to false")
+      }
+    }
+    _ => fail("expected RunCheck")
+  }
+}
+
+///|
+test "parse_cli parses --markdown in any position relative to the paths" {
+  let args : Array[String] = ["check", "old.mbti", "--markdown", "new.mbti"]
+  match parse_cli(args[0:]) {
+    RunCheck(opts) => {
+      if !opts.markdown {
+        fail("expected markdown to be true")
+      }
+      if opts.json {
+        fail("expected json to stay false when only --markdown is given")
+      }
+      if opts.old_path != "old.mbti" {
+        fail("expected old_path to be \"old.mbti\", got \{opts.old_path}")
+      }
+      if opts.new_path != "new.mbti" {
+        fail("expected new_path to be \"new.mbti\", got \{opts.new_path}")
       }
     }
     _ => fail("expected RunCheck")

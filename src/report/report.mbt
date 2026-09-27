@@ -68,6 +68,50 @@ pub fn render_text(delta : Delta, color~ : Bool) -> String {
   lines.join("\n")
 }
 
+///| GitHub-Flavored-Markdown rendering of a `Delta`, for "markdown for PR
+/// comments" (Gate 2's design brief's own roadmap phrase). Gate 1/2/3 specify
+/// nothing about this renderer's format beyond the bare signature
+/// (`pub fn render_markdown(Delta) -> String`) and that one phrase --
+/// everything below is this project's own design, the same way `Version`'s
+/// shape (`src/policy`) was this project's own design where Gate 2 named a
+/// type in every signature but never defined its shape.
+///
+/// Mirrors `render_text`'s structure (a header stating the required bump, a
+/// summary line, then one entry per change) and its "walk `delta.changes`,
+/// not `delta.active_changes()`" discipline -- a waived change is marked,
+/// never dropped, per correctness requirement 8 -- and reuses `level_word`
+/// for the same reason `render_text`/`render_json` already do (see that
+/// function's own doc comment on why an explicit `match`, not `\{}`
+/// interpolation, is used for a `derive(Debug)`-only `Level`).
+///
+/// **A bullet list, not a Markdown table, deliberately**: a table cell can't
+/// contain a literal `|` or a newline without escaping, and nothing in
+/// `src/compare` documents that a `Change`'s `detail` text will never
+/// contain either. A bullet list needs no escaping at all, at the cost of
+/// being somewhat less compact than a table -- an acceptable trade for a
+/// renderer with no format spec to satisfy beyond "readable in a PR
+/// comment."
+pub fn render_markdown(delta : Delta) -> String {
+  let lines : Array[String] = []
+  lines.push("## API compatibility report")
+  lines.push("")
+  lines.push("**Required version bump: \{level_word(delta.level())}**")
+  lines.push("")
+  let total = delta.changes.length()
+  let waived_count = total - delta.active_changes().length()
+  lines.push("\{total} change(s), \{waived_count} waived")
+  if total > 0 {
+    lines.push("")
+    delta.changes.each(fn(c) {
+      let waived_marker = if c.waived { " *(waived)*" } else { "" }
+      lines.push(
+        "- **\{level_word(c.level)}** `\{c.package_name}` `\{c.symbol.0}` (`\{c.rule.0}`): \{c.detail}\{waived_marker}",
+      )
+    })
+  }
+  lines.join("\n")
+}
+
 ///| `Span -> Json`: `{"start": ..., "end": ...}`, or `Json::null()` for the
 /// `None` most changes carry today -- only `Symbol::Unsupported` has a real
 /// span in the `surface` model as of M1 (documented gap, see `surface.mbt`

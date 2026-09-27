@@ -129,6 +129,127 @@ test "render_json matches the expected structure for a single change" {
   }
 }
 
+///| `render_markdown` includes a Markdown header naming the required bump,
+/// the summary line, and one bullet naming the change's package, symbol,
+/// rule id, and detail -- checked with `String::contains`, same reasoning as
+/// the `render_text` test above.
+test "render_markdown reports the required bump, the summary, and the change" {
+  let failures : Array[String] = []
+  try {
+    let with_foo = @ingest.of_mbti_source(
+      "package \"test/report\"\n\npub fn foo() -> Unit\n",
+      name="report",
+    )
+    let without_foo = @ingest.of_mbti_source(
+      "package \"test/report\"\n",
+      name="report",
+    )
+    let delta = @compare.compare(old=with_foo, new=without_foo)
+    let md = render_markdown(delta)
+    if !(md.contains("## API compatibility report")) {
+      failures.push("expected a Markdown header, got:\n\{md}")
+    }
+    if !(md.contains("**Required version bump: MAJOR**")) {
+      failures.push("expected the required-bump line to report MAJOR, got:\n\{md}")
+    }
+    if !(md.contains("1 change(s), 0 waived")) {
+      failures.push(
+        "expected the summary line to report 1 change and 0 waived, got:\n\{md}",
+      )
+    }
+    if !(md.contains("`test/report`")) {
+      failures.push("expected the package name, backtick-wrapped, to appear in the output")
+    }
+    if !(md.contains("`foo`")) {
+      failures.push("expected the symbol name, backtick-wrapped, to appear in the output")
+    }
+    if !(md.contains("`sym-removed`")) {
+      failures.push("expected the rule id, backtick-wrapped, to appear in the output")
+    }
+    if md.contains("*(waived)*") {
+      failures.push("expected no waived marker for a non-waived change")
+    }
+  } catch {
+    _ => failures.push("failed to parse a hand-crafted report fixture")
+  }
+  if failures.length() > 0 {
+    fail(failures.join("\n"))
+  }
+}
+
+///| `render_markdown` renders an empty delta with a PATCH required bump and
+/// no bullet list at all (no changes to list) -- mirrors the `render_json`
+/// empty-delta test above, extended to check that the "0 change(s)" summary
+/// line appears and no bullet marker (`"- "`) does.
+test "render_markdown renders an empty delta as zero changes and Patch, no bullets" {
+  let failures : Array[String] = []
+  try {
+    let surface = @ingest.of_mbti_source(
+      "package \"test/report\"\n\npub fn foo() -> Unit\n",
+      name="report",
+    )
+    let delta = @compare.compare(old=surface, new=surface)
+    let md = render_markdown(delta)
+    if !(md.contains("**Required version bump: PATCH**")) {
+      failures.push("expected the required-bump line to report PATCH, got:\n\{md}")
+    }
+    if !(md.contains("0 change(s), 0 waived")) {
+      failures.push("expected the summary line to report 0 changes, got:\n\{md}")
+    }
+    if md.contains("- **") {
+      failures.push("expected no bullet list for an empty delta, got:\n\{md}")
+    }
+  } catch {
+    _ => failures.push("failed to parse a hand-crafted report fixture")
+  }
+  if failures.length() > 0 {
+    fail(failures.join("\n"))
+  }
+}
+
+///| A waived change's bullet carries the ` *(waived)*` marker -- mirrors
+/// `render_text`'s own `[waived]` marker, and the same "waivers mark, never
+/// delete" correctness requirement. Since M1/M2-so-far has no `policy::
+/// Delta::apply` yet to actually produce a waived change from real input,
+/// this test hand-builds a `Delta`/`Change` waived by construction --
+/// `Change`'s fields are all `pub(all)`, so a direct struct literal is legal
+/// here even though no other test in this project needed one before (every
+/// other fixture goes through the real ingest+compare pipeline instead).
+/// `RuleId`/`SymbolId` are fully qualified (`@compare.RuleId`/
+/// `@surface.SymbolId`) rather than added to this package's shared
+/// `using @compare {...}`/`using @surface {...}` blocks in `imports.mbt` --
+/// same one-off reasoning `main.mbt`'s own `@compare.Level::Patch` already
+/// uses, and `imports.mbt`'s own doc comment explicitly says `RuleId` is
+/// left out of the `using` block to avoid an `unused_type_declaration`
+/// warning elsewhere in this package.
+test "render_markdown marks a waived change without dropping it" {
+  let change : Change = {
+    level: Major,
+    rule: @compare.RuleId("sym-removed"),
+    package_name: "test/report",
+    symbol: @surface.SymbolId("foo"),
+    detail: "symbol removed",
+    old_span: None,
+    new_span: None,
+    waived: true,
+  }
+  let delta : Delta = { changes: [change] }
+  let md = render_markdown(delta)
+  let failures : Array[String] = []
+  if !(md.contains("*(waived)*")) {
+    failures.push("expected the waived marker to appear for a waived change, got:\n\{md}")
+  }
+  if !(md.contains("`sym-removed`")) {
+    failures.push("expected the waived change's rule id to still appear, got:\n\{md}")
+  }
+  if !(md.contains("1 change(s), 1 waived")) {
+    failures.push("expected the summary line to count the waived change, got:\n\{md}")
+  }
+  if failures.length() > 0 {
+    fail(failures.join("\n"))
+  }
+}
+
 ///| `render_json`'s output is empty-diff, not just non-crashing, when
 /// nothing changed -- `Delta`'s own reflexivity guarantee (already proven at
 /// the `compare` level by `properties_wbtest.mbt`'s corpus test) should

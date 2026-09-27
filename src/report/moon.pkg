@@ -1,11 +1,14 @@
-// report: text / JSON rendering of a Delta (Gate 2's design brief). Pure --
-// depends on compare (for Delta/Change/Level) and surface (for Span,
-// referenced by Change's old_span/new_span) but nothing else, same "no I/O"
-// discipline as compare itself.
+// report: text / JSON / Markdown rendering of a Delta (Gate 2's design
+// brief). Pure -- depends on compare (for Delta/Change/Level) and surface
+// (for Span, referenced by Change's old_span/new_span) but nothing else,
+// same "no I/O" discipline as compare itself.
 //
-// `render_markdown` (Gate 2's third renderer, "markdown for PR comments") is
-// explicitly an M2 feature per the roadmap ("M2 version verdict: ...
-// markdown for PR comments") -- deliberately not implemented here.
+// `render_markdown` (Gate 2's third renderer, "markdown for PR comments") was
+// deferred from this package's first round (an M2 feature per the roadmap,
+// "M2 version verdict: ... markdown for PR comments") and is now implemented
+// -- see report.mbt's own doc comment on it for the format, which is this
+// project's own design (Gate 1/2/3 specify nothing beyond the bare
+// signature and that one phrase).
 import {
   "mbti-compat/src/compare",
   "mbti-compat/src/surface",

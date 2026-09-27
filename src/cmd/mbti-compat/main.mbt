@@ -161,8 +161,15 @@ async fn run_check(options : CheckOptions) -> Unit {
   let old_surface = parse_surface(options.old_path, old_source)
   let new_surface = parse_surface(options.new_path, new_source)
   let delta = @compare.compare(old=old_surface, new=new_surface)
+  // `--json` wins if both `--json` and `--markdown` are given -- `cli.mbt`'s
+  // own `CheckOptions` doc comment documents this precedence; `parse_check`
+  // deliberately doesn't treat the combination as a usage error, matching
+  // how `--color` was already silently allowed (and ignored) alongside
+  // `--json` before this round.
   let output = if options.json {
     @report.render_json(delta).stringify()
+  } else if options.markdown {
+    @report.render_markdown(delta)
   } else {
     @report.render_text(delta, color=options.color)
   }
